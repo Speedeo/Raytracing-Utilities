@@ -13,7 +13,9 @@ Create a new branch name it after the name of your example raytracer-example.
 
 **Example:**
 
+```
 MyRaytracer-example
+```
 
 ## Step 3:
 
