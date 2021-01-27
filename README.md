@@ -1,6 +1,10 @@
 # Raytracing-Utilities
 A head file for wiremod Expression 2 For Raytracing
 
+## To use
+
+Clone the respositry copy everything inside Raytracing-Utilities-master into your expression2 folder.
+
 ## Features
 
 This head file includes a suite of featers for making raytracing a little less tidieous.
