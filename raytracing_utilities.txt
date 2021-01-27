@@ -123,44 +123,6 @@ while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Render)
         
     }
     
-#[    RenderColor = render(RangerDirection)]#
-    
     DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
-#[    BackBuffer[X + Y * ScreenResolution, table] = table(RenderColor, rangerOffset(99999999, entity():pos(), RangerDirection))]#
-    
-}
 
-#[while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Denoise){
-    
-    X = X + (X < ScreenResolution ? 1 : -ScreenResolution + 1)
-    Denoise = Y >= ScreenResolution ? 0 : 1
-    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution + 1)
-    
-    RangerDirection = vec(0.5, -X / ScreenResolution + 0.5, -Y / ScreenResolution + 0.5):rotate(entity():angles())
-    
-    RenderColor = vec(0)
-    RenderDivideAmount = 0
-    
-    for(IX = X - 5, X + 5, 1){
-        
-        for(IY = Y - 5, Y + 5, 1){
-            
-            Blend = BackBuffer[X + Y * ScreenResolution, table][2, ranger]:hitNormal():dot(BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:hitNormal()) 
-            > 0.8 & BackBuffer[X + Y * ScreenResolution, table][2, ranger]:entity() == BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:entity()
-            
-            RenderColor = RenderColor + BackBuffer[IX + IY * ScreenResolution, table][1, vector] * Blend
-            
-            #printTable(BackBuffer[IX + IY * ScreenResolution, table])
-            RenderDivideAmount = RenderDivideAmount + 
-            Blend
-            
-        
-        }
-        
-    }
-    
-    RenderColor = RenderColor / RenderDivideAmount
-    
-    DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
-    
-}]#
+}
