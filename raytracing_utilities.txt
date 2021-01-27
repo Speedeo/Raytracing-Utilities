@@ -1,0 +1,176 @@
+@name 
+@inputs DigitalScreen:wirelink Lights:entity
+@outputs 
+@persist X Y MaxCpu ScreenResolution T:table Render Denoise BackBuffer:table RenderBuffer:table Sample Passes:array PassesArguments:array
+@trigger
+
+runOnTick(1)
+
+if( first() ){
+    
+    ##include "texture"
+    
+    #[
+        Welcome to E2 Beyond Infinity!
+        Max OPS here is 100,000.  CPU is a better measure of E2 perf impact.
+	
+        Documentation and examples are available at:
+        https://github.com/wiremod/wire/wiki/Expression-2
+        
+        This message will self destruct on key press.
+    ]#
+    
+    function vector render(RangerDirection:vector){
+        
+        Ranger = rangerOffset(9999999, entity():pos(), RangerDirection)
+        
+        Color = vec(1)
+        FinalColor = vec(0)
+        
+        Light = 0
+        
+        if(Ranger:entity() == Lights){
+            
+            return vec(1)
+            
+        }
+        
+        if(Ranger:hitSky()){
+            
+            return vec(0.1, 0.5, 1)
+            
+        }
+        
+        while(Ranger:entity() != Lights & !Ranger:hitSky() & Light < 2){
+            
+            
+            Color = Color * (Ranger:entity():getColor() / 255 * !Ranger:hitWorld() + Ranger:hitWorld())
+            
+            LightsRanger = rangerOffset(Ranger:position(), Lights:pos() + randvec(-1, 1) * Lights:boxSize() / 2)
+            
+            FinalColor = FinalColor + Color * ( (LightsRanger:distance() != 0 ? (( (100000 /  LightsRanger:distance() ^ 2)) * (LightsRanger:entity() == Lights) * 
+            max((Lights:pos() - Ranger:position()):normalized():dot(Ranger:hitNormal()), 0) * LightsRanger:hit()) : 0) +
+            rangerOffset(99999999, Ranger:position(), vec(1.2, 1, 4)):hitSky() * max(Ranger:hitNormal():dot(vec(1.2, 1, 4):normalized()), 0) )
+            
+            Ranger = rangerOffset(99999999, Ranger:position(), vec(1 / sin(random() * 90) - 1, random() * 2 - 1, random() * 2 - 1):normalized():rotate(Ranger:hitNormal():toAngle()))
+            
+            Light = Light + 1
+            
+        }
+        
+        return FinalColor / (FinalColor + 1)
+        
+    }
+    
+    function addPass(PassName:string, ScreenCordinates){
+        
+        Passes:pushString(PassName)
+        PassesArguments:pushNumber(ScreenCordinates)
+        
+    }
+    
+    function number getMaxCpu(){
+        
+        return 10000 / 1000000
+        
+    }
+    
+    MaxCpu = getMaxCpu()
+    
+    function wirelink:initScreen(Res){
+        Scr = This
+        Scr[1048574]=0 #Reset Screen and whatever was on it will be cleared.
+        Scr[1048569]=2 #Set color mode to 3
+        Scr[1048575]=1 #Apply changes
+        Scr[1048572]=Res #Set new resolution on Y (Height)
+        Scr[1048573]=Res #Set new resolution on X (Width)
+        Scr["PixelG",number] = 999
+    }
+    DigitalScreen:initScreen(ScreenResolution)
+    
+    ScreenResolution = 512 / 2
+    
+    Render = 1
+    
+    BackBuffer = table()
+    
+    Passes = array("render")
+    PassesArguments = array(0)
+    
+}
+
+if(changed(DigitalScreen) | (!first() & changed(first()))){
+    
+    DigitalScreen:initScreen(ScreenResolution)
+    
+}
+
+while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Render){
+    
+    X = X + (X < ScreenResolution ? 1 : -ScreenResolution + 1)
+    Render = Passes:count() == 0 ? 0 : 1
+    if(Y >= ScreenResolution) { Passes:remove(1) }
+    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution + 1)
+    
+    RangerDirection = vec(0.5, -X / ScreenResolution + 0.5, -Y / ScreenResolution + 0.5):rotate(entity():angles())
+    
+    RenderColor = vec(0)
+    
+    for(I = 1, Sample){
+        
+        Pass = Passes:string(1)
+        
+        if(PassesArguments:number(1)){
+            
+            RenderColor = RenderColor + Pass(RangerDirection, X, Y)[vector] * (1 / Sample)
+            
+        }
+        else{
+            
+            RenderColor = RenderColor + Pass(RangerDirection)[vector] * (1 / Sample)
+            
+        }
+        
+    }
+    
+#[    RenderColor = render(RangerDirection)]#
+    
+    DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
+#[    BackBuffer[X + Y * ScreenResolution, table] = table(RenderColor, rangerOffset(99999999, entity():pos(), RangerDirection))]#
+    
+}
+
+#[while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Denoise){
+    
+    X = X + (X < ScreenResolution ? 1 : -ScreenResolution + 1)
+    Denoise = Y >= ScreenResolution ? 0 : 1
+    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution + 1)
+    
+    RangerDirection = vec(0.5, -X / ScreenResolution + 0.5, -Y / ScreenResolution + 0.5):rotate(entity():angles())
+    
+    RenderColor = vec(0)
+    RenderDivideAmount = 0
+    
+    for(IX = X - 5, X + 5, 1){
+        
+        for(IY = Y - 5, Y + 5, 1){
+            
+            Blend = BackBuffer[X + Y * ScreenResolution, table][2, ranger]:hitNormal():dot(BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:hitNormal()) 
+            > 0.8 & BackBuffer[X + Y * ScreenResolution, table][2, ranger]:entity() == BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:entity()
+            
+            RenderColor = RenderColor + BackBuffer[IX + IY * ScreenResolution, table][1, vector] * Blend
+            
+            #printTable(BackBuffer[IX + IY * ScreenResolution, table])
+            RenderDivideAmount = RenderDivideAmount + 
+            Blend
+            
+        
+        }
+        
+    }
+    
+    RenderColor = RenderColor / RenderDivideAmount
+    
+    DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
+    
+}]#
