@@ -123,6 +123,7 @@ while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Render)
         
     }
     
+    RenderBuffer[X + Y * ScreenResolution, vector] = RenderColor
     DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
 
 }
