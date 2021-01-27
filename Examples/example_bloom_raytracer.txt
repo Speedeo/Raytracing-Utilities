@@ -1,0 +1,59 @@
+@name 
+@inputs 
+@outputs 
+@persist 
+@trigger 
+
+#include "Raytracing_Utilities"
+
+if(first()){
+    
+    PassesArguments:setNumber(1, 1)
+    
+    function vector render(RangerDirection:vector, X, Y){ # Implement Render
+        
+        Ranger = rangerOffset(99999999, entity():pos(), RangerDirection) # Shoot Our ranger
+        
+        if(Ranger:hitSky()){
+            
+            RenderBuffer[X + Y * ScreenResolution, vector] = vec(0.5, 0.75, 1) * 2
+            
+            return vec(0.5, 0.75, 1) * 4
+            
+        }
+        
+        RenderBuffer[X + Y * ScreenResolution, vector] = 
+        (Ranger:hitWorld() ? vec(1) : Ranger:entity():getColor() / 255) * 
+        max(Ranger:hitNormal():dot(sunDirection()), 0) * 6 * rangerOffset(99999999, Ranger:position(), sunDirection()):hitSky() + (Ranger:hitWorld() ? vec(1) : Ranger:entity():getColor() / 255) * vec(0.5, 0.75, 1) / 2
+        
+        return RenderBuffer[X + Y * ScreenResolution, vector]
+        
+    }
+    
+    function vector bloom(RangerDirection:vector, X, Y){
+        
+        FinalColor = vec(0)
+        
+        for(BloomX = -2, 2){
+            
+            for(BloomY = -2, 2){
+                
+                FinalColor = FinalColor + (clamp(RenderBuffer[(X + BloomX) + (Y + BloomY) * ScreenResolution, vector], vec(1), vec(99999999)) - vec(1)) / 10
+                
+            }
+            
+        }
+        
+        FinalColor = FinalColor / 25
+        
+        return clamp(FinalColor + clamp(RenderBuffer[X + Y * ScreenResolution, vector] / (RenderBuffer[X + Y * ScreenResolution, vector] + 1), vec(0) ,vec(1)), vec(0) ,vec(1))
+        
+    }
+    
+    addPass("bloom", 1)
+    
+    ScreenResolution = 512 / 16
+    
+    Sample = 1
+    
+}
