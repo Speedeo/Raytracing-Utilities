@@ -10,16 +10,6 @@ if( first() ){
     
     ##include "texture"
     
-    #[
-        Welcome to E2 Beyond Infinity!
-        Max OPS here is 100,000.  CPU is a better measure of E2 perf impact.
-	
-        Documentation and examples are available at:
-        https://github.com/wiremod/wire/wiki/Expression-2
-        
-        This message will self destruct on key press.
-    ]#
-    
     function vector render(RangerDirection:vector){
         
         Ranger = rangerOffset(9999999, entity():pos(), RangerDirection)
