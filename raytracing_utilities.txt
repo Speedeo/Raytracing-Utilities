@@ -1,14 +1,26 @@
-@name 
+@name Raytracing Utilities
 @inputs DigitalScreen:wirelink Lights:entity
 @outputs 
-@persist X Y MaxCpu ScreenResolution T:table Render Denoise BackBuffer:table RenderBuffer:table Sample Passes:array PassesArguments:array
+@persist X Y MaxCpu ScreenResolution T:table Render Denoise BackBuffer:table RenderBuffer:table Sample Passes:array PassesArguments:array SkipSamples
 @trigger
 
 runOnTick(1)
 
+#include "include/texture"
+
 if( first() ){
     
-    ##include "texture"
+    
+    
+    #[
+        Welcome to E2 Beyond Infinity!
+        Max OPS here is 100,000.  CPU is a better measure of E2 perf impact.
+	
+        Documentation and examples are available at:
+        https://github.com/wiremod/wire/wiki/Expression-2
+        
+        This message will self destruct on key press.
+    ]#
     
     function vector render(RangerDirection:vector){
         
@@ -59,6 +71,12 @@ if( first() ){
         
     }
     
+    function skipSamples() { 
+        
+        SkipSamples = 1
+        
+    }
+    
     function number getMaxCpu(){
         
         return 10000 / 1000000
@@ -97,14 +115,16 @@ if(changed(DigitalScreen) | (!first() & changed(first()))){
 
 while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Render){
     
-    X = X + (X < ScreenResolution ? 1 : -ScreenResolution + 1)
+    X = X + (X < ScreenResolution ? 1 : -ScreenResolution)
     Render = Passes:count() == 0 ? 0 : 1
-    if(Y >= ScreenResolution) { Passes:remove(1) }
-    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution + 1)
+    if(Y >= ScreenResolution) { Passes:remove(1) PassesArguments:remove(1) }
+    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution)
     
     RangerDirection = vec(0.5, -X / ScreenResolution + 0.5, -Y / ScreenResolution + 0.5):rotate(entity():angles())
     
     RenderColor = vec(0)
+    
+    SkipSamples = 0
     
     for(I = 1, Sample){
         
@@ -112,18 +132,65 @@ while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Render)
         
         if(PassesArguments:number(1)){
             
-            RenderColor = RenderColor + Pass(RangerDirection, X, Y)[vector] * (1 / Sample)
+            RenderColor = RenderColor + Pass(RangerDirection, X, Y)[vector] * (1 / (!SkipSamples ? Sample : 1))
             
         }
         else{
             
-            RenderColor = RenderColor + Pass(RangerDirection)[vector] * (1 / Sample)
+            RenderColor = RenderColor + Pass(RangerDirection)[vector] * (1 / (!SkipSamples ? Sample : 1))
             
+        }
+        
+        
+        if(SkipSamples) { 
+            
+            break
+            
+        }
+        
+        
+    }
+    
+#[    RenderColor = render(RangerDirection)]#
+    
+    DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
+    LastColor = RenderColor
+    
+#[    BackBuffer[X + Y * ScreenResolution, table] = table(RenderColor, rangerOffset(99999999, entity():pos(), RangerDirection))]#
+    
+}
+
+#[while(opcounter() < softQuota() * 0.9 & cpuUsage() < MaxCpu & !first() & Denoise){
+    
+    X = X + (X < ScreenResolution ? 1 : -ScreenResolution + 1)
+    Denoise = Y >= ScreenResolution ? 0 : 1
+    Y = Y + (Y < ScreenResolution ? X == ScreenResolution - 1 : -ScreenResolution + 1)
+    
+    RangerDirection = vec(0.5, -X / ScreenResolution + 0.5, -Y / ScreenResolution + 0.5):rotate(entity():angles())
+    
+    RenderColor = vec(0)
+    RenderDivideAmount = 0
+    
+    for(IX = X - 5, X + 5, 1){
+        
+        for(IY = Y - 5, Y + 5, 1){
+            
+            Blend = BackBuffer[X + Y * ScreenResolution, table][2, ranger]:hitNormal():dot(BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:hitNormal()) 
+            > 0.8 & BackBuffer[X + Y * ScreenResolution, table][2, ranger]:entity() == BackBuffer[IX + IY * ScreenResolution, table][2, ranger]:entity()
+            
+            RenderColor = RenderColor + BackBuffer[IX + IY * ScreenResolution, table][1, vector] * Blend
+            
+            #printTable(BackBuffer[IX + IY * ScreenResolution, table])
+            RenderDivideAmount = RenderDivideAmount + 
+            Blend
+            
+        
         }
         
     }
     
-    RenderBuffer[X + Y * ScreenResolution, vector] = RenderColor
+    RenderColor = RenderColor / RenderDivideAmount
+    
     DigitalScreen[X + Y * ScreenResolution] = rgb2digi(RenderColor * 255, 2)
-
-}
+    
+}]#
