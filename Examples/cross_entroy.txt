@@ -1,0 +1,182 @@
+@name 
+@inputs 
+@outputs 
+@persist 
+@trigger 
+
+#include "Raytracing_Utilities"
+
+if(first()) { 
+    
+    function vector render(RangerDirection:vector, X, Y) { 
+      
+        Ranger = rangerOffset(9999999, entity():pos(), RangerDirection)
+        
+        # This is our Ranger
+        
+        RangerIncomingDirection = RangerDirection
+        
+        RenderBuffer[X + Y * ScreenResolution, table] = table("Normal" = Ranger:hitNormal(), "Depth" = Ranger:distance(), 
+        "Albedo" = Ranger:hitWorld() ? getAlbedo(Ranger) / 255 : Ranger:entity():getColor() / 255, "Shadow" = (rangerOffset(Ranger:position(), Lights:pos()):entity() == Lights))
+        
+        # This is for denoising!
+        
+        
+        FinalColor = vec(0)
+        BounceColor = vec(1)
+        
+        Light = 0
+        
+        if(Ranger:entity() == Lights) { 
+            
+            
+            return Ranger:entity():getColor() / 255
+            
+        }
+        
+        # If we hit the Light draw the Lights color!
+        
+        if(Ranger:hitSky()) { 
+            
+            RenderBuffer[X + Y * ScreenResolution, table]["Color", vector] = vec(0.4, 0.8, 1.2) * 4
+            
+            skipSamples()
+            
+            return vec(0.4, 0.8, 1.2) * 4 / (vec(0.4, 0.8, 1.2) * 4 + 1)
+            
+        }
+        
+        # If we hit the sky draw blue!
+        
+        while(Light < 4) { 
+            
+            BounceColor = BounceColor * (Ranger:matType() == "dirt" ? vec(0.38, 0.4, 0.2) : Ranger:hitWorld() ? getAlbedo(Ranger) / 255 : Ranger:entity():getColor() / 255)
+            
+            # This gets the Albedo or raw color for our texture then bounces it!
+            
+            RandomNumber = random()
+            RandomX = random()
+            
+            RangerOutgoingDirection = 
+            vec(cos(RandomX * 90), cos(RandomNumber * 360) * (1 - cos(RandomX * 90)), sin(RandomNumber * 360) * (1 - cos(RandomX * 90))):normalized():rotate(Ranger:hitNormal():toAngle())
+            
+            #Werid Algorithm to generate a new diffuse direction! It works pretty well I think
+            
+            FinalColor = FinalColor + BounceColor * ((Lights:isValid() ? (rangerOffset(Ranger:position(), Lights:pos()):entity() == Lights) * 
+            max(Ranger:hitNormal():dot((Lights:pos() - Ranger:position()):normalized()), 0) * 40000 / (Lights:pos():distance(Ranger:position()) ^ 2) : 0) + 
+            (rangerOffset(9999999, Ranger:position(), sunDirection()):hitSky() * 
+            max(Ranger:hitNormal():dot(sunDirection()), 0) * 10) + 
+            (rangerOffset(9999999, Ranger:position(), randvec(-1, 1):setX(1):rotate(Ranger:hitNormal():toAngle())):hitSky() * vec(0.4, 0.8, 1.2)))  
+            
+            #This giant thing calculates the direct Lighting For instance!
+            
+            #[
+            
+                
+                In your normal raytracer you may have a ranger that shoots a ranger to see if we hit is shadow. Some call this a shadow ranger
+                
+                It may look something like this:
+                
+                    rangerOffset(99999999, RangerHitPosition, sunDirection())
+                    
+                We can then use this to see with the sun is visble from where we hit or anther words see if we are in shadow
+                
+                In the render equation we can use this in the direct lighting part of it
+                
+                In our case by mutipling our direct lighting by our bounce color!
+                
+                We add this together at every bounce then after we either hit one of our light sources or run out of bounces we send this off to the screen.
+                
+                Here is a visual
+                
+                
+                            0 #Sun
+                             \
+                              \ <--- This is the ranger
+               []- <- The E2   \ 
+                   \_           \
+                     \----------__ <- This is the floor we hit
+                     ^ This is the main ranger
+                
+            ]#
+            
+            Light = Light + 1
+            
+            Ranger = rangerOffset(99999999, Ranger:position(), RangerOutgoingDirection)
+            
+            # We then shoot our new bounce
+            
+            if(Ranger:hitSky()) { 
+                
+                break
+                
+            }
+            
+            RangerIncomingDirection = RangerOutgoingDirection
+            
+            # Remember the directions so we can do some cool math later.
+            
+        }
+        
+        RenderBuffer[X + Y * ScreenResolution, table]["Color", vector] = FinalColor
+        # This is for denoising
+        
+        Average = max(FinalColor[1], FinalColor[2], FinalColor[3]) 
+        
+        # This is a cool thing called a tone mapper.
+        # It bassically Maps 0 - Infinity to 0 - 1
+        
+        # You might be thinking how is this useful
+        
+        # Well when we render our image we get a image which goes from 0 - Some number
+        # Our screens can only display 255 different light levels. So
+        # We have to Take it from 0 - Some Number to 0 - 1
+        # So we can then Multiply it by 255 to get a nice color between 0 - 255. If you know colors you may know 255 is the biggest
+        # Number we can go to for either red green or blue.
+        # So we do this so we dont get clwon vomit. As called by some.
+        # Clown Vomit is usually caused by colors being brighter than 255
+        
+        return FinalColor / (Average + 1)
+        
+    }
+    
+    function vector denoise(RangerDirection:vector, X, Y) { 
+        
+        FinalColor = vec(0)
+        FullChannels = 0
+        
+        for(DenoiseX = -4, 4) { 
+            
+            for(DenoiseY = -4, 4) { 
+                
+                Channels = RenderBuffer[(X + DenoiseX) + (Y + DenoiseY) * ScreenResolution, table]
+                MainChannels = RenderBuffer[X + Y * ScreenResolution, table]
+                
+                Channel = (Channels["Normal", vector]:dot(MainChannels["Normal", vector]) > 0.8) * (1 - min(Channels["Albedo", vector]:distance(
+                MainChannels["Albedo", vector]), 1)) * (Channels["Shadow", number] == MainChannels["Shadow", number])
+                FullChannels = FullChannels + Channel
+                
+                FinalColor = FinalColor + Channels["Color", vector] * Channel
+                
+            }
+            
+        }
+        
+        return FinalColor / FullChannels / (FinalColor / FullChannels + 1)
+        
+    }
+    
+    PassesArguments:setNumber(1, 1)
+    
+    addPass("denoise", 1)
+    
+    ScreenResolution = 512 / 1
+    
+    Sample = 64
+    
+    MaxCpu = 1 / 1000000 * 40000
+    
+    loadTextureFile("texturefiles/averages.txt")
+    
+    
+}
