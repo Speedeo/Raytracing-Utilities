@@ -1,0 +1,92 @@
+@name texture
+@persist Texture:table
+
+runOnFile(1)
+
+function vector table:getVectorAtUV(U, V, TextureSize){
+    
+    return This:exists(U + V * TextureSize + 1) ? 
+    vec(This[U + V * TextureSize + 1, table][1, number], This[U + V * TextureSize + 1, table][2, number], This[U + V * TextureSize + 1, table][3, number]) : 
+    vec(0)
+    
+}
+
+function vector table:lerpVector(X, Y, TextureResolution){
+    local Xb = abs(X)
+    local Yb = abs(Y)
+    local Vx = 1-(Xb-ceil(Xb))%1 # BEGONE, SYMMETRY BUG!
+    local Vy = 1-(Yb-ceil(Yb))%1
+    local Xx1 = This:getVectorAtUV(floor(Xb)%TextureResolution, floor(Yb)%TextureResolution, TextureResolution)*(Vx)*(Vy)
+    local Xx2 = This:getVectorAtUV(ceil(Xb)%TextureResolution, floor(Yb)%TextureResolution, TextureResolution)*(1-Vx)*(Vy)
+    local Yy1 = This:getVectorAtUV(floor(Xb)%TextureResolution, ceil(Yb)%TextureResolution, TextureResolution)*(Vx)*(1-Vy)
+    local Yy2 = This:getVectorAtUV(ceil(Xb)%TextureResolution, ceil(Yb)%TextureResolution, TextureResolution)*(1-Vx)*(1-Vy)
+    local Main = Xx1+Xx2+Yy1+Yy2
+    return Main
+}
+
+function vector getUvCordinates(Position:vector, HitNormal:vector){
+    
+    UvCordinates = Position:rotate(-HitNormal:toAngle()):setX(0)
+    
+    return vec(UvCordinates:y(), UvCordinates:z(), 0)
+    
+}
+
+function string getTextureName(Ranger:ranger){
+    
+    return Ranger:hitWorld() ? Ranger:hitTexture():lower() : Ranger:entity():getMaterials()[1, string]
+    
+}
+
+function vector getTextureAlbedo(TextureName:string, Position:vector, HitNormal:vector){
+    
+    TextureData = Texture[TextureName, table]
+    TextureSize = TextureData["TextureResolution", number]
+    TextureScale = TextureData["TextureScale", number] * 16
+    TextureAlbedos = TextureData["TextureAlbedos", table]
+    
+    UvCordinates = getUvCordinates(Position, HitNormal)
+    
+    U = ((UvCordinates:x() / TextureScale % TextureSize))
+    V = ((UvCordinates:y() / TextureScale % TextureSize))
+    
+    return TextureAlbedos:lerpVector(V, U, TextureSize)
+    
+}
+
+function vector getAlbedo(Ranger:ranger){
+    
+    TextureName = getTextureName(Ranger)
+    TextureAlbedo = getTextureAlbedo(TextureName, Ranger:position(), Ranger:hitNormal())
+    
+    return TextureAlbedo
+    
+}
+
+function number loadTextureFile(Path:string){
+    
+    Render = 0 # Set Render to 0
+    
+    fileLoad(">e2shared/" + Path)
+    
+    return 1
+    
+}
+
+function void finalizeTextureLoading(){
+    
+    print("Loaded Texture File")
+    
+    Render = 1
+    
+    TextureFile = fileRead()
+    
+    Texture = jsonDecode(TextureFile)
+    
+}
+
+if(fileRead() != "" & (fileClk())){
+    
+    finalizeTextureLoading()
+    
+}
